@@ -11,7 +11,8 @@ namespace ProgamerWebAPI.Models
         public int puzzle_level_id { get; set; }
         public string puzzle_type { get; set; }
         public string puzzle_instructions { get; set; }
-        public string puzzle_expected_outcome { get; set; }
+        public string puzzle_expected_output { get; set; }
         public string puzzle_data { get; set; }
+        public string puzzle_answer { get; set; }
     }
 }
