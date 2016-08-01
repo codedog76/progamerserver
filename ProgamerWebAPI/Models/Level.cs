@@ -16,6 +16,7 @@ namespace ProgamerWebAPI.Models
         public int level_score { get; set; }
         public int level_attempts { get; set; }
         public int level_time { get; set; }
+
         public List<Puzzle> puzzle_list { get; set; }
 
         public Level()

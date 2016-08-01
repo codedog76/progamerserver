@@ -74,7 +74,10 @@ namespace ProgamerWebAPI.Controllers
                     MySQLConnection dbConnection2 = new MySQLConnection();
                     MySqlDataReader dbReader2 = dbConnection2.getMySqlDataReader("INSERT INTO progamer.userlevel (userlevel.user_student_number, userlevel.level_id) SELECT '" + user_student_number + "', level.level_id FROM progamer.level;");
                     dbConnection2.closeConnection();
-                    if (dbReader2.RecordsAffected != 0)
+                    MySQLConnection dbConnection3 = new MySQLConnection();
+                    MySqlDataReader dbReader3 = dbConnection3.getMySqlDataReader("INSERT INTO progamer.userlevel (userlevel.user_student_number, userlevel.level_id) SELECT '" + user_student_number + "', level.level_id FROM progamer.level;");
+                    dbConnection3.closeConnection();
+                    if (dbReader2.RecordsAffected != 0 && dbReader3.RecordsAffected != 0)
                     {
                         BooleanResponse response = new BooleanResponse();
                         response.response_valid = true;
@@ -168,7 +171,6 @@ namespace ProgamerWebAPI.Controllers
                 string user_student_number = incoming_user.user_student_number;
                 MySQLConnection dbConnection = new MySQLConnection();
                 MySqlDataReader dbReader = dbConnection.getMySqlDataReader("SELECT list1.user_student_number, user.user_nickname, user.user_avatar, list1.user_overall_score, list1.user_overall_attempts, list1.user_overall_time FROM (SELECT userlevel.user_student_number, SUM(userlevel.userlevel_score) AS user_overall_score, SUM(userlevel.userlevel_attempts) AS user_overall_attempts, SUM(userlevel.userlevel_time) AS user_overall_time FROM progamer.userlevel INNER JOIN progamer.level ON userlevel.level_id=level.level_id WHERE level.level_number<=(SELECT MAX(level.level_number) FROM progamer.userlevel INNER JOIN progamer.level ON userlevel.level_id=level.level_id AND userlevel.user_student_number='" + user_student_number + "') group by userlevel.user_student_number) AS list1 INNER JOIN (SELECT userlevel.user_student_number FROM progamer.userlevel INNER JOIN progamer.level ON userlevel.level_id=level.level_id WHERE level.level_number=(SELECT MAX(level.level_number) FROM progamer.userlevel INNER JOIN progamer.level ON userlevel.level_id=level.level_id AND userlevel.user_student_number='" + user_student_number + "')) AS list2 ON list1.user_student_number=list2.user_student_number INNER JOIN progamer.user ON user.user_student_number=list1.user_student_number;");
-
                 if (dbReader.HasRows)
                 {
                     UserList outgoing_user_list = new UserList();
@@ -219,6 +221,9 @@ namespace ProgamerWebAPI.Controllers
                     return Ok(response);
                 }
                 string user_student_number = incoming_user.user_student_number;
+                MySQLConnection dbConnection0 = new MySQLConnection();
+                MySqlDataReader dbReader0 = dbConnection0.getMySqlDataReader("INSERT INTO progamer.userlevel (userlevel.user_student_number, userlevel.level_id) SELECT * FROM (SELECT '" + user_student_number + "', level.level_id FROM progamer.level) as tmp WHERE NOT EXISTS (SELECT * FROM progamer.userlevel WHERE userlevel.user_student_number='" + user_student_number + "' AND tmp.level_id=userlevel.level_id);");
+                dbConnection0.closeConnection();
                 MySQLConnection dbConnection1 = new MySQLConnection();
                 MySqlDataReader dbReader1 = dbConnection1.getMySqlDataReader("SELECT userlevel.user_student_number, level.level_id, level.level_number, level.level_title, level.level_description, userlevel.userlevel_completed, userlevel.userlevel_score, userlevel.userlevel_attempts, userlevel.userlevel_time FROM progamer.level LEFT JOIN progamer.userlevel ON level.level_id=userlevel.level_id AND userlevel.user_student_number='" + user_student_number + "';");
                 if (dbReader1.HasRows)
@@ -237,7 +242,7 @@ namespace ProgamerWebAPI.Controllers
                         outgoing_level.level_attempts = dbReader1.GetInt32(7);
                         outgoing_level.level_time = dbReader1.GetInt32(8);
                         MySQLConnection dbConnection2 = new MySQLConnection();
-                        MySqlDataReader dbReader2 = dbConnection2.getMySqlDataReader("SELECT puzzle.puzzle_id, puzzle.level_id, puzzle.puzzle_type, puzzle.puzzle_instructions, puzzle.puzzle_expected_output, puzzle.puzzle_data, puzzle.puzzle_answer FROM progamer.puzzle WHERE puzzle.level_id=" + outgoing_level.level_id + " ORDER BY RAND() LIMIT 5;");
+                        MySqlDataReader dbReader2 = dbConnection2.getMySqlDataReader("SELECT puzzle.puzzle_id, puzzle.puzzle_level_id, puzzle.puzzle_instructions, puzzle.puzzle_data FROM progamer.puzzle WHERE puzzle.puzzle_level_id=" + outgoing_level.level_id + " ORDER BY RAND() LIMIT 5;");
                         if (dbReader2.HasRows)
                         {
                             while (dbReader2.Read())
@@ -245,13 +250,9 @@ namespace ProgamerWebAPI.Controllers
                                 Puzzle outgoing_puzzle = new Puzzle();
                                 outgoing_puzzle.puzzle_id = dbReader2.GetInt32(0);
                                 outgoing_puzzle.puzzle_level_id = dbReader2.GetInt32(1);
-                                outgoing_puzzle.puzzle_type = dbReader2.GetString(2);
-                                outgoing_puzzle.puzzle_instructions = dbReader2.GetString(3);
-                                outgoing_puzzle.puzzle_expected_output = dbReader2.GetString(4);
-                                outgoing_puzzle.puzzle_data = dbReader2.GetString(5);
-                                outgoing_puzzle.puzzle_answer = dbReader2.GetString(6);
+                                outgoing_puzzle.puzzle_instructions = dbReader2.GetString(2);
+                                outgoing_puzzle.puzzle_data = dbReader2.GetString(3);
                                 outgoing_level.puzzle_list.Add(outgoing_puzzle);
-
                             }
                         }
                         dbConnection2.closeConnection();
@@ -275,6 +276,145 @@ namespace ProgamerWebAPI.Controllers
             {
                 BooleanResponse response = new BooleanResponse();
                 response.response_valid = false;
+                response.response_message = ex.Message;
+                return Ok(response);
+            }
+        }
+
+        [Route("achievements")]
+        public IHttpActionResult PostAchievements([FromBody]User incoming_user)
+        {
+            try
+            {
+                if (incoming_user.Equals(null))
+                {
+                    BooleanResponse response = new BooleanResponse();
+                    response.response_valid = false;
+                    response.response_message = "Invalid input";
+                    return Ok(response);
+                }
+                string user_student_number = incoming_user.user_student_number;
+                MySQLConnection dbConnection = new MySQLConnection();
+                MySqlDataReader dbReader = dbConnection.getMySqlDataReader("SELECT achievement.achievement_id, achievement.achievement_title, achievement.achievement_description, achievement.achievement_total FROM progamer.achievement;");
+                if (dbReader.HasRows)
+                {
+                    AchievementList outgoing_achievement_list = new AchievementList();
+                    while (dbReader.Read())
+                    {
+                        Achievement outgoing_achievement = new Achievement();
+                        outgoing_achievement.achievement_id = dbReader.GetInt32(0);
+                        outgoing_achievement.achievement_title = dbReader.GetString(1);
+                        outgoing_achievement.achievement_description = dbReader.GetString(2);
+                        outgoing_achievement.achievement_total = dbReader.GetInt32(3);
+                        outgoing_achievement_list.achievement_list.Add(outgoing_achievement);
+                    }
+                    dbConnection.closeConnection();
+                    outgoing_achievement_list.response_valid = true;
+                    outgoing_achievement_list.response_message = "Valid achievements found";
+                    return Ok(outgoing_achievement_list);
+                }
+                else
+                {
+                    dbConnection.closeConnection();
+                    BooleanResponse response = new BooleanResponse();
+                    response.response_valid = false;
+                    response.response_message = "Achievements don't exist";
+                    return Ok(response);
+                }
+            }
+            catch (MySqlException ex)
+            {
+                BooleanResponse response = new BooleanResponse();
+                response.response_valid = false;
+                response.response_message = ex.Message;
+                return Ok(response);
+            }
+        }
+
+        [Route("userachievements")]
+        public IHttpActionResult PostUserAchievements([FromBody]User incoming_user)
+        {
+            try
+            {
+                if (incoming_user.Equals(null))
+                {
+                    BooleanResponse response = new BooleanResponse();
+                    response.response_valid = false;
+                    response.response_message = "Invalid input";
+                    return Ok(response);
+                }
+                string user_student_number = incoming_user.user_student_number;
+                MySQLConnection dbConnection0 = new MySQLConnection();
+                MySqlDataReader dbReader0 = dbConnection0.getMySqlDataReader("INSERT INTO progamer.userachievement (userachievement.user_student_number, userachievement.achievement_id) SELECT * FROM (SELECT '" + user_student_number + "', achievement.achievement_id FROM progamer.achievement) as tmp WHERE NOT EXISTS (SELECT * FROM progamer.userachievement WHERE userachievement.user_student_number='" + user_student_number + "' AND tmp.achievement_id=userachievement.achievement_id);");
+                dbConnection0.closeConnection();
+                MySQLConnection dbConnection1 = new MySQLConnection();
+                MySqlDataReader dbReader1 = dbConnection1.getMySqlDataReader("SELECT userachievement.userachievement_id, userachievement.user_student_number, userachievement.achievement_id, userachievement.userachievement_progress FROM progamer.userachievement WHERE userachievement.user_student_number='" + user_student_number+"';");
+                if (dbReader1.HasRows)
+                {
+                    UserAchievementList outgoing_userachievement_list = new UserAchievementList();
+                    while (dbReader1.Read())
+                    {
+                        UserAchievement outgoing_userachievement = new UserAchievement();
+                        outgoing_userachievement.userachievement_id = dbReader1.GetInt32(0);
+                        outgoing_userachievement.user_student_number = dbReader1.GetString(1);
+                        outgoing_userachievement.achievement_id = dbReader1.GetInt32(2);
+                        outgoing_userachievement.userachievement_progress = dbReader1.GetInt32(3);
+                        outgoing_userachievement_list.userachievement_list.Add(outgoing_userachievement);
+                    }
+                    dbConnection1.closeConnection();
+                    outgoing_userachievement_list.response_valid = true;
+                    outgoing_userachievement_list.response_message = "Valid userachievements found";
+                    return Ok(outgoing_userachievement_list);
+                }
+                else
+                {
+                    dbConnection1.closeConnection();
+                    BooleanResponse response = new BooleanResponse();
+                    response.response_valid = false;
+                    response.response_message = "Userachievements don't exist";
+                    return Ok(response);
+                }
+            }
+            catch (MySqlException ex)
+            {
+                BooleanResponse response = new BooleanResponse();
+                response.response_valid = false;
+                response.response_message = ex.Message;
+                return Ok(response);
+            }
+        }
+
+        [Route("updateuserachievement")]
+        public IHttpActionResult PostUpdateUserLevel([FromBody]UserAchievementList incoming_userachievement_list)
+        {
+            try
+            {
+                BooleanResponse response = new BooleanResponse();
+                if (incoming_userachievement_list.Equals(null))
+                {
+                    response.response_valid = false;
+                    response.response_message = "Invalid input";
+                    return Ok(response);
+                }
+                List<UserAchievement> userachievement_list = incoming_userachievement_list.userachievement_list;
+                foreach (UserAchievement incoming_userachievement in userachievement_list)
+                {
+                    int userachievement_id = incoming_userachievement.userachievement_id;
+                    string user_student_number = incoming_userachievement.user_student_number;
+                    int achievement_id = incoming_userachievement.achievement_id;
+                    int userachievement_progress = incoming_userachievement.userachievement_progress;
+                    MySQLConnection dbConnection = new MySQLConnection();
+                    MySqlDataReader dbReader = dbConnection.getMySqlDataReader("UPDATE progamer.userachievement SET userachievement.userachievement_progress=" + userachievement_progress + " WHERE userachievement_progress.user_student_number='" + user_student_number + "' AND userachievement_progress.achievement_id='" + achievement_id + "';");
+                    dbConnection.closeConnection();
+                }
+                response.response_valid = true;
+                response.response_message = "UserAchievement updated";
+                return Ok(response);
+            }
+            catch (MySqlException ex)
+            {
+                BooleanResponse response = new BooleanResponse();
+                response.response_valid = true;
                 response.response_message = ex.Message;
                 return Ok(response);
             }
@@ -340,7 +480,7 @@ namespace ProgamerWebAPI.Controllers
                 }
                 int level_id = incoming_level.level_id;
                 MySQLConnection dbConnection = new MySQLConnection();
-                MySqlDataReader dbReader = dbConnection.getMySqlDataReader("SELECT puzzle.puzzle_id, puzzle.level_id, puzzle.puzzle_type, puzzle.puzzle_instructions, puzzle.puzzle_expected_output, puzzle.puzzle_data, puzzle.puzzle_answer FROM progamer.puzzle WHERE puzzle.level_id="+ level_id + " ORDER BY RAND() LIMIT 5;");
+                MySqlDataReader dbReader = dbConnection.getMySqlDataReader("SELECT puzzle.puzzle_id, puzzle.puzzle_level_id, puzzle.puzzle_instructions, puzzle.puzzle_data FROM progamer.puzzle WHERE puzzle.puzzle_level_id=" + level_id + " ORDER BY RAND() LIMIT 5;");
                 if (dbReader.HasRows)
                 {
                     Level puzzle_list = new Level();
@@ -349,11 +489,8 @@ namespace ProgamerWebAPI.Controllers
                         Puzzle outgoing_puzzle = new Puzzle();
                         outgoing_puzzle.puzzle_id = dbReader.GetInt32(0);
                         outgoing_puzzle.puzzle_level_id = dbReader.GetInt32(1);
-                        outgoing_puzzle.puzzle_type = dbReader.GetString(2);
-                        outgoing_puzzle.puzzle_instructions = dbReader.GetString(3);
-                        outgoing_puzzle.puzzle_expected_output = dbReader.GetString(4);
-                        outgoing_puzzle.puzzle_data = dbReader.GetString(5);
-                        outgoing_puzzle.puzzle_answer = dbReader.GetString(6);
+                        outgoing_puzzle.puzzle_instructions = dbReader.GetString(2);
+                        outgoing_puzzle.puzzle_data = dbReader.GetString(3);
                         puzzle_list.puzzle_list.Add(outgoing_puzzle);
                     }
                     dbConnection.closeConnection();
