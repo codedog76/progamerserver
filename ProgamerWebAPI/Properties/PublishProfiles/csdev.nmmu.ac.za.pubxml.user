@@ -49,7 +49,7 @@ by editing this MSBuild file. In order to learn more about this please visit htt
       <publishTime>08/03/2014 20:33:56</publishTime>
     </File>
     <File Include="bin/ProgamerWebAPI.dll">
-      <publishTime>08/01/2016 05:22:12</publishTime>
+      <publishTime>08/04/2016 00:07:11</publishTime>
     </File>
     <File Include="bin/roslyn/csc.exe">
       <publishTime>06/18/2015 20:19:46</publishTime>
