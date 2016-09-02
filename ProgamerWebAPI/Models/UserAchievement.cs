@@ -14,5 +14,8 @@ namespace ProgamerWebAPI.Models
         public int userachievement_completed { get; set; }
         public int userachievement_notified { get; set; }
         public string userachievement_date_completed { get; set; }
+        public string achievement_title { get; set; }
+        public string achievement_description { get; set; }
+        public int achievement_total { get; set; }
     }
 }

@@ -124,7 +124,7 @@ namespace ProgamerWebAPI.Controllers
                 string user_student_number = incoming_user.user_student_number;
                 string user_password = incoming_user.user_password;
                 MySQLConnection dbConnection = new MySQLConnection();
-                MySqlDataReader dbReader = dbConnection.getMySqlDataReader("SELECT user.user_student_number, user.user_nickname, user.user_avatar, user.user_is_private FROM progamer.user WHERE user.user_student_number='" + user_student_number + "' AND user.user_password='" + user_password + "' limit 1;");
+                MySqlDataReader dbReader = dbConnection.getMySqlDataReader("SELECT user.user_student_number, user.user_nickname, user.user_avatar, user.user_is_private, user.user_type FROM progamer.user WHERE user.user_student_number='" + user_student_number + "' AND user.user_password='" + user_password + "' limit 1;");
                 dbReader.Read();
                 if (dbReader.HasRows)
                 {
@@ -133,6 +133,7 @@ namespace ProgamerWebAPI.Controllers
                     outgoing_user.user_nickname = dbReader.GetString(1);
                     outgoing_user.user_avatar = dbReader.GetInt32(2);
                     outgoing_user.user_is_private = dbReader.GetInt32(3);
+                    outgoing_user.user_type = dbReader.GetString(4);
                     dbConnection.closeConnection();
                     outgoing_user.response_valid = true;
                     outgoing_user.response_message = "Valid user found";
@@ -169,8 +170,95 @@ namespace ProgamerWebAPI.Controllers
                     return Ok(response);
                 }
                 string user_student_number = incoming_user.user_student_number;
+                string user_type = incoming_user.user_type;
                 MySQLConnection dbConnection = new MySQLConnection();
-                MySqlDataReader dbReader = dbConnection.getMySqlDataReader("SELECT list1.user_student_number, user.user_nickname, user.user_avatar, list1.user_overall_score, list1.user_overall_attempts, list1.user_overall_time FROM (SELECT userlevel.user_student_number, SUM(userlevel.userlevel_score) AS user_overall_score, SUM(userlevel.userlevel_attempts) AS user_overall_attempts, SUM(userlevel.userlevel_time) AS user_overall_time FROM progamer.userlevel INNER JOIN progamer.level ON userlevel.level_id=level.level_id WHERE level.level_number<=(SELECT MAX(level.level_number) FROM progamer.userlevel INNER JOIN progamer.level ON userlevel.level_id=level.level_id AND userlevel.user_student_number='" + user_student_number + "') group by userlevel.user_student_number) AS list1 INNER JOIN (SELECT userlevel.user_student_number FROM progamer.userlevel INNER JOIN progamer.level ON userlevel.level_id=level.level_id WHERE level.level_number=(SELECT MAX(level.level_number) FROM progamer.userlevel INNER JOIN progamer.level ON userlevel.level_id=level.level_id AND userlevel.user_student_number='" + user_student_number + "')) AS list2 ON list1.user_student_number=list2.user_student_number INNER JOIN progamer.user ON user.user_student_number=list1.user_student_number;");
+                if(user_type.Equals("admin"))
+                {
+                    MySqlDataReader dbReader = dbConnection.getMySqlDataReader("SELECT user.user_student_number, user.user_nickname, user.user_avatar, IFNULL(list1.user_total_score, 0), IFNULL(list1.user_total_attempts, 0), IFNULL(list1.user_total_time, 0) FROM (SELECT userlevel.user_student_number, SUM(userlevel.userlevel_score) AS user_total_score, SUM(userlevel.userlevel_attempts) AS user_total_attempts, SUM(userlevel.userlevel_time) AS user_total_time FROM progamer.userlevel WHERE userlevel.userlevel_completed=1 GROUP BY userlevel.user_student_number) AS list1 RIGHT JOIN progamer.user ON list1.user_student_number=user.user_student_number WHERE user.user_type='student';");
+                    if (dbReader.HasRows)
+                    {
+                        UserList outgoing_user_list = new UserList();
+                        while (dbReader.Read())
+                        {
+                            User outgoing_user = new User();
+                            outgoing_user.user_student_number = dbReader.GetString(0);
+                            outgoing_user.user_nickname = dbReader.GetString(1);
+                            outgoing_user.user_avatar = dbReader.GetInt32(2);
+                            outgoing_user.user_total_score = dbReader.GetInt32(3);
+                            outgoing_user.user_total_attempts = dbReader.GetInt32(4);
+                            outgoing_user.user_total_time = dbReader.GetInt32(5);
+                            outgoing_user_list.user_list.Add(outgoing_user);
+                        }
+                        outgoing_user_list.response_valid = true;
+                        outgoing_user_list.response_message = "Valid users found";
+                        dbConnection.closeConnection();
+                        return Ok(outgoing_user_list);
+                    }
+                    else
+                    {
+                        BooleanResponse response = new BooleanResponse();
+                        response.response_valid = false;
+                        response.response_message = user_student_number + " doesn't exist";
+                        dbConnection.closeConnection();
+                        return Ok(response);
+                    }
+                }            
+                else
+                {
+                    MySqlDataReader dbReader = dbConnection.getMySqlDataReader("SELECT user.user_student_number, user.user_nickname, user.user_avatar, userlevel_data.user_total_score, userlevel_data.user_total_attempts, userlevel_data.user_total_time FROM (SELECT list1.user_student_number, list1.user_total_score, list1.user_total_attempts, list1.user_total_time FROM (SELECT userlevel.user_student_number, SUM(userlevel.userlevel_score) AS user_total_score, SUM(userlevel.userlevel_attempts) AS user_total_attempts, SUM(userlevel.userlevel_time) AS user_total_time FROM progamer.userlevel WHERE userlevel.userlevel_completed=1 AND userlevel.level_id<=(SELECT MAX(userlevel.level_id) FROM progamer.userlevel WHERE userlevel.user_student_number='" + user_student_number + "' AND userlevel.userlevel_completed=1) group by userlevel.user_student_number) AS list1 INNER JOIN (SELECT userlevel.user_student_number FROM progamer.userlevel WHERE userlevel.userlevel_completed=1 AND userlevel.level_id=(SELECT MAX(userlevel.level_id) FROM progamer.userlevel WHERE userlevel.user_student_number='" + user_student_number + "' AND userlevel.userlevel_completed=1) group by userlevel.user_student_number) list2 ON list1.user_student_number=list2.user_student_number) AS userlevel_data INNER JOIN progamer.user ON userlevel_data.user_student_number=user.user_student_number WHERE user_type='student';");
+                    if (dbReader.HasRows)
+                    {
+                        UserList outgoing_user_list = new UserList();
+                        while (dbReader.Read())
+                        {
+                            User outgoing_user = new User();
+                            outgoing_user.user_student_number = dbReader.GetString(0);
+                            outgoing_user.user_nickname = dbReader.GetString(1);
+                            outgoing_user.user_avatar = dbReader.GetInt32(2);
+                            outgoing_user.user_total_score = dbReader.GetInt32(3);
+                            outgoing_user.user_total_attempts = dbReader.GetInt32(4);
+                            outgoing_user.user_total_time = dbReader.GetInt32(5);
+                            outgoing_user_list.user_list.Add(outgoing_user);
+                        }
+                        outgoing_user_list.response_valid = true;
+                        outgoing_user_list.response_message = "Valid users found";
+                        dbConnection.closeConnection();
+                        return Ok(outgoing_user_list);
+                    }
+                    else
+                    {
+                        BooleanResponse response = new BooleanResponse();
+                        response.response_valid = false;
+                        response.response_message = user_student_number + " doesn't exist";
+                        dbConnection.closeConnection();
+                        return Ok(response);
+                    }
+                }                
+            }
+            catch (MySqlException ex)
+            {
+                BooleanResponse response = new BooleanResponse();
+                response.response_valid = false;
+                response.response_message = ex.Message;
+                return Ok(response);
+            }
+        }
+
+        [Route("studentdata")]
+        public IHttpActionResult PostStudentData([FromBody]User incoming_user)
+        {
+            try
+            {
+                if (incoming_user.Equals(null))
+                {
+                    BooleanResponse response = new BooleanResponse();
+                    response.response_valid = false;
+                    response.response_message = "Invalid input";
+                    return Ok(response);
+                }
+                string user_student_number = incoming_user.user_student_number;
+                MySQLConnection dbConnection = new MySQLConnection();
+                MySqlDataReader dbReader = dbConnection.getMySqlDataReader("SELECT user.user_student_number, user.user_nickname, IFNULL(list1.user_levels_completed, 0), IFNULL(list1.user_total_score, 0), IFNULL(list1.user_total_attempts, 0), IFNULL(list1.user_total_time, 0), IFNULL(list1.user_average_score, 0), IFNULL(list1.user_average_attempts, 0), IFNULL(list1.user_average_time, 0) FROM (SELECT userlevel.user_student_number, MAX(userlevel.level_id) AS user_levels_completed, SUM(userlevel.userlevel_score) AS user_total_score, SUM(userlevel.userlevel_attempts) AS user_total_attempts, SUM(userlevel.userlevel_time) AS user_total_time, AVG(userlevel.userlevel_score) AS user_average_score, AVG(userlevel.userlevel_attempts) AS user_average_attempts, AVG(userlevel.userlevel_time) AS user_average_time FROM progamer.userlevel WHERE userlevel.userlevel_completed=1 GROUP BY userlevel.user_student_number) AS list1 RIGHT JOIN progamer.user ON list1.user_student_number=user.user_student_number WHERE user.user_type='student';");
                 if (dbReader.HasRows)
                 {
                     UserList outgoing_user_list = new UserList();
@@ -179,10 +267,13 @@ namespace ProgamerWebAPI.Controllers
                         User outgoing_user = new User();
                         outgoing_user.user_student_number = dbReader.GetString(0);
                         outgoing_user.user_nickname = dbReader.GetString(1);
-                        outgoing_user.user_avatar = dbReader.GetInt32(2);
-                        outgoing_user.user_overall_score = dbReader.GetInt32(3);
-                        outgoing_user.user_overall_attempts = dbReader.GetInt32(4);
-                        outgoing_user.user_overall_time = dbReader.GetInt32(5);
+                        outgoing_user.user_levels_completed = dbReader.GetInt32(2);
+                        outgoing_user.user_total_score = dbReader.GetInt32(3);
+                        outgoing_user.user_total_attempts = dbReader.GetInt32(4);
+                        outgoing_user.user_total_time = dbReader.GetInt32(5);
+                        outgoing_user.user_average_score = dbReader.GetDouble(6);
+                        outgoing_user.user_average_attempts = dbReader.GetDouble(7);
+                        outgoing_user.user_average_time = dbReader.GetDouble(8);
                         outgoing_user_list.user_list.Add(outgoing_user);
                     }
                     outgoing_user_list.response_valid = true;
@@ -198,6 +289,7 @@ namespace ProgamerWebAPI.Controllers
                     dbConnection.closeConnection();
                     return Ok(response);
                 }
+
             }
             catch (MySqlException ex)
             {
@@ -295,7 +387,7 @@ namespace ProgamerWebAPI.Controllers
                 }
                 int level_id = incoming_level.level_id;
                 MySQLConnection dbConnection = new MySQLConnection();
-                MySqlDataReader dbReader = dbConnection.getMySqlDataReader("SELECT AVG(userlevel.userlevel_score) AS avg_score, AVG(userlevel.userlevel_attempts) AS avg_attempts, AVG(userlevel.userlevel_time) AS avg_time FROM progamer.userlevel WHERE userlevel.level_id=" + level_id + " AND userlevel.userlevel_score<>0 AND userlevel.userlevel_attempts<>0 AND userlevel.userlevel_time<>0;");
+                MySqlDataReader dbReader = dbConnection.getMySqlDataReader("SELECT AVG(userlevel.userlevel_score) AS avg_score, AVG(userlevel.userlevel_attempts) AS avg_attempts, AVG(userlevel.userlevel_time) AS avg_time FROM progamer.userlevel INNER JOIN progamer.user ON userlevel.user_student_number=user.user_student_number WHERE userlevel.level_id="+level_id+" AND userlevel.userlevel_score<>0 AND userlevel.userlevel_attempts<>0 AND userlevel.userlevel_time<>0 AND user.user_type='student';");
                 dbReader.Read();
                 if (dbReader.HasRows)
                 {
@@ -394,7 +486,7 @@ namespace ProgamerWebAPI.Controllers
                 MySqlDataReader dbReader0 = dbConnection0.getMySqlDataReader("INSERT INTO progamer.userachievement (userachievement.user_student_number, userachievement.achievement_id) SELECT * FROM (SELECT '" + user_student_number + "', achievement.achievement_id FROM progamer.achievement) as tmp WHERE NOT EXISTS (SELECT * FROM progamer.userachievement WHERE userachievement.user_student_number='" + user_student_number + "' AND tmp.achievement_id=userachievement.achievement_id);");
                 dbConnection0.closeConnection();
                 MySQLConnection dbConnection1 = new MySQLConnection();
-                MySqlDataReader dbReader1 = dbConnection1.getMySqlDataReader("SELECT userachievement.userachievement_id, userachievement.user_student_number, userachievement.achievement_id, userachievement.userachievement_progress, userachievement.userachievement_completed, userachievement.userachievement_notified, IFNULL(userachievement.userachievement_date_completed, '') AS userachievement_date_completed FROM progamer.userachievement WHERE userachievement.user_student_number='"+user_student_number+"';");
+                MySqlDataReader dbReader1 = dbConnection1.getMySqlDataReader("SELECT userachievement.userachievement_id, userachievement.user_student_number, userachievement.achievement_id, userachievement.userachievement_notified, achievement.achievement_title, achievement.achievement_description, achievement.achievement_total, userachievement.userachievement_progress, userachievement.userachievement_completed, IFNULL(userachievement.userachievement_date_completed, '') AS userachievement_date_completed FROM progamer.userachievement INNER JOIN progamer.achievement ON userachievement.achievement_id=achievement.achievement_id AND userachievement.user_student_number='"+user_student_number+"';");
                 if (dbReader1.HasRows)
                 {
                     UserAchievementList outgoing_userachievement_list = new UserAchievementList();
@@ -404,10 +496,14 @@ namespace ProgamerWebAPI.Controllers
                         outgoing_userachievement.userachievement_id = dbReader1.GetInt32(0);
                         outgoing_userachievement.user_student_number = dbReader1.GetString(1);
                         outgoing_userachievement.achievement_id = dbReader1.GetInt32(2);
-                        outgoing_userachievement.userachievement_progress = dbReader1.GetInt32(3);
-                        outgoing_userachievement.userachievement_completed = dbReader1.GetInt32(4);
-                        outgoing_userachievement.userachievement_notified = dbReader1.GetInt32(5);
-                        outgoing_userachievement.userachievement_date_completed = dbReader1.GetString(6);
+                        outgoing_userachievement.userachievement_notified = dbReader1.GetInt32(3);
+                        outgoing_userachievement.achievement_title = dbReader1.GetString(4);
+                        outgoing_userachievement.achievement_description = dbReader1.GetString(5);
+                        outgoing_userachievement.achievement_total = dbReader1.GetInt32(6);
+                        outgoing_userachievement.userachievement_progress = dbReader1.GetInt32(7);
+                        outgoing_userachievement.userachievement_completed = dbReader1.GetInt32(8);
+                        outgoing_userachievement.userachievement_date_completed = dbReader1.GetString(9);
+
                         outgoing_userachievement_list.userachievement_list.Add(outgoing_userachievement);
                     }
                     dbConnection1.closeConnection();
@@ -461,16 +557,11 @@ namespace ProgamerWebAPI.Controllers
                     dbConnection.closeConnection();
 
                     MySQLConnection dbConnection2 = new MySQLConnection();
-                    MySqlDataReader dbReader2 = dbConnection2.getMySqlDataReader("SELECT userachievement_id, user_student_number, achievement_id, userachievement_progress, userachievement_completed, userachievement_notified, userachievement_date_completed FROM progamer.userachievement WHERE userachievement_id="+userachievement_id+" LIMIT 1;");
+                    MySqlDataReader dbReader2 = dbConnection2.getMySqlDataReader("SELECT userachievement_id, userachievement_date_completed FROM progamer.userachievement WHERE userachievement_id="+userachievement_id+" LIMIT 1;");
                     dbConnection2.closeConnection();
                     UserAchievement outgoing_user_achievement = new UserAchievement();
                     outgoing_user_achievement.userachievement_id = dbReader2.GetInt32(0);
-                    outgoing_user_achievement.user_student_number = dbReader2.GetString(1);
-                    outgoing_user_achievement.achievement_id = dbReader2.GetInt32(2);
-                    outgoing_user_achievement.userachievement_progress = dbReader2.GetInt32(3);
-                    outgoing_user_achievement.userachievement_completed = dbReader2.GetInt32(4);
-                    outgoing_user_achievement.userachievement_notified = dbReader2.GetInt32(5);
-                    outgoing_user_achievement.userachievement_date_completed = dbReader2.GetString(6);
+                    outgoing_user_achievement.userachievement_date_completed = dbReader2.GetString(1);
                     outgoing_userachievement_list.userachievement_list.Add(outgoing_user_achievement);
                 }
                 outgoing_userachievement_list.response_valid = true;
@@ -500,7 +591,7 @@ namespace ProgamerWebAPI.Controllers
                 }
                 string user_student_number = incoming_user.user_student_number;
                 MySQLConnection dbConnection = new MySQLConnection();
-                MySqlDataReader dbReader = dbConnection.getMySqlDataReader("SELECT user.user_student_number, user.user_nickname, user.user_avatar, user.user_is_private FROM progamer.user WHERE user.user_student_number='" + user_student_number + "' LIMIT 1;");
+                MySqlDataReader dbReader = dbConnection.getMySqlDataReader("SELECT user.user_student_number, user.user_nickname, user.user_avatar, user.user_is_private, IFNULL(totals.user_total_score, 0) AS user_total_score, IFNULL(totals.user_total_attempts, 0) AS user_total_attempts, IFNULL(totals.user_total_time, 0) AS user_total_time, IFNULL(averages.user_average_score, 0) AS user_average_score, IFNULL(averages.user_average_attempts, 0) AS user_average_attempts, IFNULL(averages.user_average_time, 0) AS user_average_time FROM (SELECT SUM(userlevel.userlevel_score) AS user_total_score, SUM(userlevel.userlevel_attempts) AS user_total_attempts, SUM(userlevel.userlevel_time) AS user_total_time FROM progamer.userlevel WHERE userlevel.user_student_number='" + user_student_number + "' AND userlevel.userlevel_completed='1') AS totals, (SELECT AVG(userlevel.userlevel_score) AS user_average_score, AVG(userlevel.userlevel_attempts) AS user_average_attempts, AVG(userlevel.userlevel_time) AS user_average_time FROM progamer.userlevel WHERE userlevel.user_student_number='" + user_student_number + "' AND userlevel.userlevel_completed='1') AS averages, progamer.user WHERE user.user_student_number='" + user_student_number+"' LIMIT 1;");
                 dbReader.Read();
                 if (dbReader.HasRows)
                 {
@@ -509,6 +600,60 @@ namespace ProgamerWebAPI.Controllers
                     outgoing_user.user_nickname = dbReader.GetString(1);
                     outgoing_user.user_avatar = dbReader.GetInt32(2);
                     outgoing_user.user_is_private = dbReader.GetInt32(3);
+                    outgoing_user.user_total_score = dbReader.GetInt32(4);
+                    outgoing_user.user_total_attempts = dbReader.GetInt32(5);
+                    outgoing_user.user_total_time = dbReader.GetInt32(6);
+                    outgoing_user.user_average_score = dbReader.GetInt32(7);
+                    outgoing_user.user_average_attempts = dbReader.GetInt32(8);
+                    outgoing_user.user_average_time = dbReader.GetInt32(9);
+                    outgoing_user.response_valid = true;
+                    outgoing_user.response_message = "Valid user found";
+                    dbConnection.closeConnection();
+                    return Ok(outgoing_user);
+                }
+                else
+                {
+                    dbConnection.closeConnection();
+                    BooleanResponse response = new BooleanResponse();
+                    response.response_valid = false;
+                    response.response_message = user_student_number + " doesn't exist";
+                    return Ok(response);
+                }
+            }
+            catch (MySqlException ex)
+            {
+                BooleanResponse response = new BooleanResponse();
+                response.response_valid = false;
+                response.response_message = ex.Message;
+                return Ok(response);
+            }
+        }
+
+        [Route("average")]
+        public IHttpActionResult PostAverage([FromBody]User incoming_user)
+        {
+            try
+            {
+                if (incoming_user.Equals(null))
+                {
+                    BooleanResponse response = new BooleanResponse();
+                    response.response_valid = false;
+                    response.response_message = "Invalid input";
+                    return Ok(response);
+                }
+                string user_student_number = incoming_user.user_student_number;
+                MySQLConnection dbConnection = new MySQLConnection();
+                MySqlDataReader dbReader = dbConnection.getMySqlDataReader("SELECT totals.user_total_score, totals.user_total_attempts, totals.user_total_time, averages.user_average_score, averages.user_average_attempts, averages.user_average_time FROM (SELECT SUM(userlevel.userlevel_score) AS user_total_score, SUM(userlevel.userlevel_attempts) AS user_total_attempts, SUM(userlevel.userlevel_time) AS user_total_time FROM progamer.userlevel INNER JOIN progamer.user ON userlevel.user_student_number=user.user_student_number WHERE userlevel.userlevel_completed='1' AND user.user_type='student') AS totals, (SELECT AVG(userlevel.userlevel_score) AS user_average_score, AVG(userlevel.userlevel_attempts) AS user_average_attempts, AVG(userlevel.userlevel_time) AS user_average_time FROM progamer.userlevel INNER JOIN progamer.user ON userlevel.user_student_number=user.user_student_number WHERE userlevel.userlevel_completed='1' AND user.user_type='student') AS averages LIMIT 1;");
+                dbReader.Read();
+                if (dbReader.HasRows)
+                {
+                    User outgoing_user = new User();
+                    outgoing_user.user_total_score = dbReader.GetInt32(0);
+                    outgoing_user.user_total_attempts = dbReader.GetInt32(1);
+                    outgoing_user.user_total_time = dbReader.GetInt32(2);
+                    outgoing_user.user_average_score = dbReader.GetInt32(3);
+                    outgoing_user.user_average_attempts = dbReader.GetInt32(4);
+                    outgoing_user.user_average_time = dbReader.GetInt32(5);
                     outgoing_user.response_valid = true;
                     outgoing_user.response_message = "Valid user found";
                     dbConnection.closeConnection();
