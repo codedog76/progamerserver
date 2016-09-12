@@ -172,7 +172,7 @@ namespace ProgamerWebAPI.Controllers
                 string user_student_number = incoming_user.user_student_number;
                 string user_type = incoming_user.user_type;
                 MySQLConnection dbConnection = new MySQLConnection();
-                if(user_type.Equals("admin"))
+                if (user_type.Equals("admin"))
                 {
                     MySqlDataReader dbReader = dbConnection.getMySqlDataReader("SELECT user.user_student_number, user.user_nickname, user.user_avatar, IFNULL(list1.user_total_score, 0), IFNULL(list1.user_total_attempts, 0), IFNULL(list1.user_total_time, 0) FROM (SELECT userlevel.user_student_number, SUM(userlevel.userlevel_score) AS user_total_score, SUM(userlevel.userlevel_attempts) AS user_total_attempts, SUM(userlevel.userlevel_time) AS user_total_time FROM progamer.userlevel WHERE userlevel.userlevel_completed=1 GROUP BY userlevel.user_student_number) AS list1 RIGHT JOIN progamer.user ON list1.user_student_number=user.user_student_number WHERE user.user_type='student';");
                     if (dbReader.HasRows)
@@ -202,7 +202,7 @@ namespace ProgamerWebAPI.Controllers
                         dbConnection.closeConnection();
                         return Ok(response);
                     }
-                }            
+                }
                 else
                 {
                     MySqlDataReader dbReader = dbConnection.getMySqlDataReader("SELECT user.user_student_number, user.user_nickname, user.user_avatar, userlevel_data.user_total_score, userlevel_data.user_total_attempts, userlevel_data.user_total_time FROM (SELECT list1.user_student_number, list1.user_total_score, list1.user_total_attempts, list1.user_total_time FROM (SELECT userlevel.user_student_number, SUM(userlevel.userlevel_score) AS user_total_score, SUM(userlevel.userlevel_attempts) AS user_total_attempts, SUM(userlevel.userlevel_time) AS user_total_time FROM progamer.userlevel WHERE userlevel.userlevel_completed=1 AND userlevel.level_id<=(SELECT MAX(userlevel.level_id) FROM progamer.userlevel WHERE userlevel.user_student_number='" + user_student_number + "' AND userlevel.userlevel_completed=1) group by userlevel.user_student_number) AS list1 INNER JOIN (SELECT userlevel.user_student_number FROM progamer.userlevel WHERE userlevel.userlevel_completed=1 AND userlevel.level_id=(SELECT MAX(userlevel.level_id) FROM progamer.userlevel WHERE userlevel.user_student_number='" + user_student_number + "' AND userlevel.userlevel_completed=1) group by userlevel.user_student_number) list2 ON list1.user_student_number=list2.user_student_number) AS userlevel_data INNER JOIN progamer.user ON userlevel_data.user_student_number=user.user_student_number WHERE user_type='student';");
@@ -233,7 +233,7 @@ namespace ProgamerWebAPI.Controllers
                         dbConnection.closeConnection();
                         return Ok(response);
                     }
-                }                
+                }
             }
             catch (MySqlException ex)
             {
@@ -373,6 +373,104 @@ namespace ProgamerWebAPI.Controllers
             }
         }
 
+        [Route("adminlevels")]
+        public IHttpActionResult PostAdminLevels([FromBody]User incoming_user)
+        {
+            try
+            {
+                if (incoming_user.Equals(null))
+                {
+                    BooleanResponse response = new BooleanResponse();
+                    response.response_valid = false;
+                    response.response_message = "Invalid input";
+                    return Ok(response);
+                }
+                string user_student_number = incoming_user.user_student_number;
+                MySQLConnection dbConnection = new MySQLConnection();
+                MySqlDataReader dbReader = dbConnection.getMySqlDataReader("SELECT level.level_id, level.level_number, level.level_title FROM progamer.level;");
+                if (dbReader.HasRows)
+                {
+                    LevelList outgoing_level_list = new LevelList();
+                    while (dbReader.Read())
+                    {
+                        Level outgoing_level = new Level();
+                        outgoing_level.level_id = dbReader.GetInt32(0);
+                        outgoing_level.level_number = dbReader.GetInt32(1);
+                        outgoing_level.level_title = dbReader.GetString(2);
+                        outgoing_level_list.level_list.Add(outgoing_level);
+                    }
+                    dbConnection.closeConnection();
+                    outgoing_level_list.response_valid = true;
+                    outgoing_level_list.response_message = "Valid levels found";
+                    return Ok(outgoing_level_list);
+                }
+                else
+                {
+                    dbConnection.closeConnection();
+                    BooleanResponse response = new BooleanResponse();
+                    response.response_valid = false;
+                    response.response_message = "Levels don't exist";
+                    return Ok(response);
+                }
+            }
+            catch (MySqlException ex)
+            {
+                BooleanResponse response = new BooleanResponse();
+                response.response_valid = false;
+                response.response_message = ex.Message;
+                return Ok(response);
+            }
+        }
+
+        [Route("adminpuzzles")]
+        public IHttpActionResult PostAdminPuzzles([FromBody]Level incoming_level)
+        {
+            try
+            {
+                if (incoming_level.Equals(null))
+                {
+                    BooleanResponse response = new BooleanResponse();
+                    response.response_valid = false;
+                    response.response_message = "Invalid input";
+                    return Ok(response);
+                }
+                int level_id = incoming_level.level_id;
+                MySQLConnection dbConnection = new MySQLConnection();
+                MySqlDataReader dbReader = dbConnection.getMySqlDataReader("SELECT puzzle.puzzle_id, puzzle.puzzle_instructions, puzzle.puzzle_data FROM progamer.puzzle WHERE puzzle.puzzle_level_id="+level_id+";");
+                if (dbReader.HasRows)
+                {
+                    PuzzleList outgoing_puzzle_list = new PuzzleList();
+                    while (dbReader.Read())
+                    {
+                        Puzzle outgoing_puzzle = new Puzzle();
+                        outgoing_puzzle.puzzle_id = dbReader.GetInt32(0);
+                        outgoing_puzzle.puzzle_instructions = dbReader.GetString(1);
+                        outgoing_puzzle.puzzle_data = dbReader.GetString(2);
+                        outgoing_puzzle_list.puzzle_list.Add(outgoing_puzzle);
+                    }
+                    dbConnection.closeConnection();
+                    outgoing_puzzle_list.response_valid = true;
+                    outgoing_puzzle_list.response_message = "Valid puzzles found";
+                    return Ok(outgoing_puzzle_list);
+                }
+                else
+                {
+                    dbConnection.closeConnection();
+                    BooleanResponse response = new BooleanResponse();
+                    response.response_valid = false;
+                    response.response_message = "No puzzles found";
+                    return Ok(response);
+                }
+            }
+            catch (MySqlException ex)
+            {
+                BooleanResponse response = new BooleanResponse();
+                response.response_valid = false;
+                response.response_message = ex.Message;
+                return Ok(response);
+            }
+        }
+
         [Route("averagelevel")]
         public IHttpActionResult PostAverageLevel([FromBody]Level incoming_level)
         {
@@ -387,7 +485,7 @@ namespace ProgamerWebAPI.Controllers
                 }
                 int level_id = incoming_level.level_id;
                 MySQLConnection dbConnection = new MySQLConnection();
-                MySqlDataReader dbReader = dbConnection.getMySqlDataReader("SELECT AVG(userlevel.userlevel_score) AS avg_score, AVG(userlevel.userlevel_attempts) AS avg_attempts, AVG(userlevel.userlevel_time) AS avg_time FROM progamer.userlevel INNER JOIN progamer.user ON userlevel.user_student_number=user.user_student_number WHERE userlevel.level_id="+level_id+" AND userlevel.userlevel_score<>0 AND userlevel.userlevel_attempts<>0 AND userlevel.userlevel_time<>0 AND user.user_type='student';");
+                MySqlDataReader dbReader = dbConnection.getMySqlDataReader("SELECT AVG(userlevel.userlevel_score) AS avg_score, AVG(userlevel.userlevel_attempts) AS avg_attempts, AVG(userlevel.userlevel_time) AS avg_time FROM progamer.userlevel INNER JOIN progamer.user ON userlevel.user_student_number=user.user_student_number WHERE userlevel.level_id=" + level_id + " AND userlevel.userlevel_score<>0 AND userlevel.userlevel_attempts<>0 AND userlevel.userlevel_time<>0 AND user.user_type='student';");
                 dbReader.Read();
                 if (dbReader.HasRows)
                 {
@@ -486,7 +584,7 @@ namespace ProgamerWebAPI.Controllers
                 MySqlDataReader dbReader0 = dbConnection0.getMySqlDataReader("INSERT INTO progamer.userachievement (userachievement.user_student_number, userachievement.achievement_id) SELECT * FROM (SELECT '" + user_student_number + "', achievement.achievement_id FROM progamer.achievement) as tmp WHERE NOT EXISTS (SELECT * FROM progamer.userachievement WHERE userachievement.user_student_number='" + user_student_number + "' AND tmp.achievement_id=userachievement.achievement_id);");
                 dbConnection0.closeConnection();
                 MySQLConnection dbConnection1 = new MySQLConnection();
-                MySqlDataReader dbReader1 = dbConnection1.getMySqlDataReader("SELECT userachievement.userachievement_id, userachievement.user_student_number, userachievement.achievement_id, userachievement.userachievement_notified, achievement.achievement_title, achievement.achievement_description, achievement.achievement_total, userachievement.userachievement_progress, userachievement.userachievement_completed, IFNULL(userachievement.userachievement_date_completed, '') AS userachievement_date_completed FROM progamer.userachievement INNER JOIN progamer.achievement ON userachievement.achievement_id=achievement.achievement_id AND userachievement.user_student_number='"+user_student_number+"';");
+                MySqlDataReader dbReader1 = dbConnection1.getMySqlDataReader("SELECT userachievement.userachievement_id, userachievement.user_student_number, userachievement.achievement_id, userachievement.userachievement_notified, achievement.achievement_title, achievement.achievement_description, achievement.achievement_total, userachievement.userachievement_progress, userachievement.userachievement_completed, IFNULL(userachievement.userachievement_date_completed, '') AS userachievement_date_completed FROM progamer.userachievement INNER JOIN progamer.achievement ON userachievement.achievement_id=achievement.achievement_id AND userachievement.user_student_number='" + user_student_number + "';");
                 if (dbReader1.HasRows)
                 {
                     UserAchievementList outgoing_userachievement_list = new UserAchievementList();
@@ -557,7 +655,7 @@ namespace ProgamerWebAPI.Controllers
                     dbConnection.closeConnection();
 
                     MySQLConnection dbConnection2 = new MySQLConnection();
-                    MySqlDataReader dbReader2 = dbConnection2.getMySqlDataReader("SELECT userachievement_id, userachievement_date_completed FROM progamer.userachievement WHERE userachievement_id="+userachievement_id+" LIMIT 1;");
+                    MySqlDataReader dbReader2 = dbConnection2.getMySqlDataReader("SELECT userachievement_id, userachievement_date_completed FROM progamer.userachievement WHERE userachievement_id=" + userachievement_id + " LIMIT 1;");
                     dbConnection2.closeConnection();
                     UserAchievement outgoing_user_achievement = new UserAchievement();
                     outgoing_user_achievement.userachievement_id = dbReader2.GetInt32(0);
@@ -591,7 +689,7 @@ namespace ProgamerWebAPI.Controllers
                 }
                 string user_student_number = incoming_user.user_student_number;
                 MySQLConnection dbConnection = new MySQLConnection();
-                MySqlDataReader dbReader = dbConnection.getMySqlDataReader("SELECT user.user_student_number, user.user_nickname, user.user_avatar, user.user_is_private, IFNULL(totals.user_total_score, 0) AS user_total_score, IFNULL(totals.user_total_attempts, 0) AS user_total_attempts, IFNULL(totals.user_total_time, 0) AS user_total_time, IFNULL(averages.user_average_score, 0) AS user_average_score, IFNULL(averages.user_average_attempts, 0) AS user_average_attempts, IFNULL(averages.user_average_time, 0) AS user_average_time FROM (SELECT SUM(userlevel.userlevel_score) AS user_total_score, SUM(userlevel.userlevel_attempts) AS user_total_attempts, SUM(userlevel.userlevel_time) AS user_total_time FROM progamer.userlevel WHERE userlevel.user_student_number='" + user_student_number + "' AND userlevel.userlevel_completed='1') AS totals, (SELECT AVG(userlevel.userlevel_score) AS user_average_score, AVG(userlevel.userlevel_attempts) AS user_average_attempts, AVG(userlevel.userlevel_time) AS user_average_time FROM progamer.userlevel WHERE userlevel.user_student_number='" + user_student_number + "' AND userlevel.userlevel_completed='1') AS averages, progamer.user WHERE user.user_student_number='" + user_student_number+"' LIMIT 1;");
+                MySqlDataReader dbReader = dbConnection.getMySqlDataReader("SELECT user.user_student_number, user.user_nickname, user.user_avatar, user.user_is_private, IFNULL(totals.user_total_score, 0) AS user_total_score, IFNULL(totals.user_total_attempts, 0) AS user_total_attempts, IFNULL(totals.user_total_time, 0) AS user_total_time, IFNULL(averages.user_average_score, 0) AS user_average_score, IFNULL(averages.user_average_attempts, 0) AS user_average_attempts, IFNULL(averages.user_average_time, 0) AS user_average_time FROM (SELECT SUM(userlevel.userlevel_score) AS user_total_score, SUM(userlevel.userlevel_attempts) AS user_total_attempts, SUM(userlevel.userlevel_time) AS user_total_time FROM progamer.userlevel WHERE userlevel.user_student_number='" + user_student_number + "' AND userlevel.userlevel_completed='1') AS totals, (SELECT AVG(userlevel.userlevel_score) AS user_average_score, AVG(userlevel.userlevel_attempts) AS user_average_attempts, AVG(userlevel.userlevel_time) AS user_average_time FROM progamer.userlevel WHERE userlevel.user_student_number='" + user_student_number + "' AND userlevel.userlevel_completed='1') AS averages, progamer.user WHERE user.user_student_number='" + user_student_number + "' LIMIT 1;");
                 dbReader.Read();
                 if (dbReader.HasRows)
                 {
